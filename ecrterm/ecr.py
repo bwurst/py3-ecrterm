@@ -16,7 +16,7 @@ from ecrterm.exceptions import (
 from ecrterm.packets.base_packets import (
     Authorisation, CloseCardSession, Completion, DisplayText, EndOfDay, Packet,
     PrintLine, ReadCard, Registration, ResetTerminal, StatusEnquiry,
-    StatusInformation, WriteFiles, PreAuthorisation, PartialCancellation, LogOff, Reversal)
+    StatusInformation, WriteFiles, PreAuthorisation, PartialCancellation, LogOff, Reversal, AbortCommand)
 from ecrterm.packets.types import ConfigByte
 from ecrterm.transmission._transmission import Transmission
 from ecrterm.transmission.signals import ACK, DLE, ETX, NAK, STX, TRANSMIT_OK
@@ -346,7 +346,11 @@ class ECR(object):
         - resets transport: @see ecrterm.transmission.Transport.reset()
         - restarts pt: @see self.restart()
         """
-        self.transport.reset()
+        try:
+            # SocketTransport has no reset method
+            self.transport.reset()
+        except AttributeError:
+            pass
         if self.transport.insert_delays:
             sleep(1)
         ret = self.restart()
@@ -378,6 +382,24 @@ class ECR(object):
             kw['line%s' % i] = line
             i += 1
         return self.transmit(DisplayText(**kw))
+
+    def abort_command(self):
+        """
+        aborts current payment
+
+        Implemented by only setting appropriate variables, the ongoing process loop handles the abortion
+
+        @note: This method may be called from another thread.
+        """
+        try:
+            if self.transport:
+                self.transport.abort_receive = True
+            if self.transmitter:
+                self.transmitter.abort_requested = True
+            return True
+        except AttributeError:
+            return False
+
 
     def status(self):
         """

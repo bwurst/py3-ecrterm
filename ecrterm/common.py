@@ -303,6 +303,7 @@ class Dumpling:
 
 class Transport:
     insert_delays = False
+    abort_receive = False
 
     def connect(self, *args, **kwargs):
         """
