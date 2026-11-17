@@ -98,7 +98,6 @@ class ECR(object):
     MAX_TEXT_LINES = 4
     _state_registered = None
     _state_connected = None
-    _abort_command = False
 
     def __init__(self, device='/dev/ttyUSB0', password='123456'):
         """
@@ -385,7 +384,6 @@ class ECR(object):
         aborts current payment
         """
         self.transport.abort_receive = True
-        self._abort_command = True
 
     def send_abort_command(self):
         self.transmit(AbortCommand())
@@ -426,9 +424,7 @@ class ECR(object):
             # we actually make a small sleep, allowing better flow.
             sleep(0.2)
         transmission = self.transmitter.transmit(packet)
-        if self._abort_command:
-            self._abort_command = False
-            self.send_abort_command()
+
         return transmission
 
     def request_reservation(self, amount_cent=50, listener=None):
