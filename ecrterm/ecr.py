@@ -16,7 +16,7 @@ from ecrterm.exceptions import (
 from ecrterm.packets.base_packets import (
     Authorisation, CloseCardSession, Completion, DisplayText, EndOfDay, Packet,
     PrintLine, ReadCard, Registration, ResetTerminal, StatusEnquiry,
-    StatusInformation, WriteFiles, PreAuthorisation, PartialCancellation, LogOff, Reversal)
+    StatusInformation, WriteFiles, PreAuthorisation, PartialCancellation, LogOff, Reversal, AbortCommand)
 from ecrterm.packets.types import ConfigByte
 from ecrterm.transmission._transmission import Transmission
 from ecrterm.transmission.signals import ACK, DLE, ETX, NAK, STX, TRANSMIT_OK
@@ -98,6 +98,7 @@ class ECR(object):
     MAX_TEXT_LINES = 4
     _state_registered = None
     _state_connected = None
+    _abort_command = False
 
     def __init__(self, device='/dev/ttyUSB0', password='123456'):
         """
@@ -379,6 +380,17 @@ class ECR(object):
             i += 1
         return self.transmit(DisplayText(**kw))
 
+    def abort_command(self):
+        """
+        aborts current payment
+        """
+        self.transport.abort_receive = True
+        self._abort_command = True
+
+    def send_abort_command(self):
+        self.transmit(AbortCommand())
+        return True
+
     def status(self):
         """
         executes a status enquiry. also sets self.version if not set.
@@ -414,6 +426,9 @@ class ECR(object):
             # we actually make a small sleep, allowing better flow.
             sleep(0.2)
         transmission = self.transmitter.transmit(packet)
+        if self._abort_command:
+            self._abort_command = False
+            self.send_abort_command()
         return transmission
 
     def request_reservation(self, amount_cent=50, listener=None):

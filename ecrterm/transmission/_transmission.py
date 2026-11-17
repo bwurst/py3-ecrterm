@@ -60,6 +60,8 @@ class Transmission(object):
             history += [(False, packet)]
             logger.debug("> %r", packet)
             success, response = self.transport.send(packet.serialize())
+            if not response:
+                raise TransmissionException('No data, possibly aborted')
             response = Packet.parse(response)
             logger.debug("< %r", response)
             history += [(True, response)]
@@ -73,6 +75,8 @@ class Transmission(object):
                 try:
                     success, response = self.transport.receive(
                         self.actual_timeout)
+                    if not response:
+                        raise TransmissionException('No data, possibly aborted')
                     response = Packet.parse(response)
                     logger.debug("< %r", response)
                     history += [(True, response)]

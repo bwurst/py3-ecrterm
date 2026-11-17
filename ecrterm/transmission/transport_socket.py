@@ -1,4 +1,5 @@
 import logging
+import time
 from binascii import hexlify
 from functools import partial
 from socket import (
@@ -108,7 +109,6 @@ class SocketTransport(Transport):
         total_sent = 0
         msglen = len(data)
         while total_sent < msglen:
-            self.sock.settimeout(self.read_timeout)
             sent = self.sock.send(data[total_sent:])
             if self._packetdebug:
                 print('sent', sent, 'bytes of', hexformat(
@@ -120,16 +120,27 @@ class SocketTransport(Transport):
             return True
         return self.receive()
 
-    def _receive_bytes(self, length: int) -> bytes:
+    def _receive_bytes(self, length: int, timeout: int = 180) -> bytes:
         """Receive and return a fixed amount of bytes."""
         recv_bytes = 0
         result = b''
         if self._packetdebug:
-            print('\nwaiting for', length, 'bytes')
-        self.sock.settimeout(self.read_timeout)
+            print('\nwaiting for', length, 'bytes (timeout', timeout, 'seconds)')
+        starttime = time.time()
         while recv_bytes < length:
+            chunk = b''
             try:
-                chunk = self.sock.recv(length - recv_bytes)
+                self.sock.settimeout(0.5)
+                while not chunk:
+                    try:
+                        chunk = self.sock.recv(length - recv_bytes)
+                    except SocketTimeout:
+                        if self.abort_receive:
+                            # abortion signal from outside
+                            self.abort_receive = False
+                            return result
+                        if timeout and time.time() - starttime > timeout:
+                            raise
             except SocketTimeout:
                 raise TransportTimeoutException('Timed out.')
             if self._packetdebug:
@@ -140,17 +151,19 @@ class SocketTransport(Transport):
             recv_bytes += len(chunk)
         return result
 
-    def _receive_length(self) -> Tuple[bytes, int]:
+    def _receive_length(self, timeout: int = 180) -> Tuple[bytes, int]:
         """
         Receive the 4 bytes on the socket which indicates the message
         length, and return the packed and the `int` converted length.
         """
-        data = self._receive_bytes(length=3)
+        data = self._receive_bytes(length=3, timeout=timeout)
+        if len(data) < 3:
+            return data, 0
         length = data[2]
         if length != 0xff:
             return data, length
         # Need to get 2 more bytes
-        length = self._receive_bytes(length=2)
+        length = self._receive_bytes(length=2, timeout=timeout)
         data += length
         return data, unpack('<H', length)[0]
 
@@ -158,10 +171,10 @@ class SocketTransport(Transport):
         """
         Receive the response from the terminal and return is as `bytes`.
         """
-        data, length = self._receive_length()
+        data, length = self._receive_length(timeout=timeout)
         if not length:  # Length is 0
             return data
-        new_data = self._receive_bytes(length=length)
+        new_data = self._receive_bytes(length=length, timeout=timeout)
         return data + new_data
 
     def receive(
@@ -169,8 +182,7 @@ class SocketTransport(Transport):
         """
         Receive data, return success status and packet bytes
         """
-        self.sock.settimeout(timeout)
-        data = self._receive()
+        data = self._receive(timeout=timeout or TIMEOUT_T2)
         logger.debug('<< %s', data.hex())
         return True, data
 
