@@ -387,6 +387,8 @@ class ECR(object):
 
     def send_abort_command(self):
         self.transmit(AbortCommand())
+        sleep(1)
+        self.reset()
         return True
 
     def status(self):
