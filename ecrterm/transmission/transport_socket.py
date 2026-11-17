@@ -127,6 +127,7 @@ class SocketTransport(Transport):
         if self._packetdebug:
             print('\nwaiting for', length, 'bytes (timeout', timeout, 'seconds)')
         starttime = time.time()
+        self.abort_receive = False
         while recv_bytes < length:
             chunk = b''
             try:
