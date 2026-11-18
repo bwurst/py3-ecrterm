@@ -49,7 +49,7 @@ class SocketTransport(Transport):
     insert_delays = False
     defaults = dict(
         connect_timeout=5, so_keepalive=0, tcp_keepidle=1, tcp_keepintvl=3,
-        tcp_keepcnt=5, debug='false', packetdebug='false')
+        tcp_keepcnt=5, debug='false', packetdebug='false', read_timeout=10)
 
     def __init__(self, uri: str):
         """Setup the IP and Port."""
@@ -62,6 +62,8 @@ class SocketTransport(Transport):
         qs_parsed = parse_qs(qs=parsed.query)
         self.connect_timeout = int(qs_parsed.get(
             'connect_timeout', [self.defaults['connect_timeout']])[0])
+        self.read_timeout = int(qs_parsed.get(
+            'read_timeout', [self.defaults['read_timeout']])[0])
         self.so_keepalive = int(qs_parsed.get(
             'so_keepalive', [self.defaults['so_keepalive']])[0])
         self.tcp_keepidle = int(qs_parsed.get(
