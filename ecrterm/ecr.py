@@ -346,7 +346,10 @@ class ECR(object):
         - resets transport: @see ecrterm.transmission.Transport.reset()
         - restarts pt: @see self.restart()
         """
-        self.transport.reset()
+        try:
+            self.transport.reset()
+        except AttributeError:
+            pass
         if self.transport.insert_delays:
             sleep(1)
         ret = self.restart()
@@ -384,12 +387,8 @@ class ECR(object):
         aborts current payment
         """
         self.transport.abort_receive = True
+        self.transmitter.abort_requested = True
 
-    def send_abort_command(self):
-        self.transmit(AbortCommand())
-        sleep(1)
-        self.reset()
-        return True
 
     def status(self):
         """

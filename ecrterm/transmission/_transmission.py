@@ -5,7 +5,7 @@ Transmission Basics.
 import logging
 
 from ecrterm.exceptions import TransmissionException, TransportLayerException
-from ecrterm.packets.base_packets import PacketReceived, Packet
+from ecrterm.packets.base_packets import PacketReceived, Packet, AbortCommand
 from ecrterm.transmission.signals import TIMEOUT_T4_DEFAULT, TRANSMIT_OK
 
 logger = logging.getLogger('ecrterm.transmission')
@@ -18,6 +18,7 @@ class Transmission(object):
     """
     actual_timeout = TIMEOUT_T4_DEFAULT
     last = None
+    abort_requested = False
 
     def __init__(self, transport):
         self.transport = transport
@@ -51,6 +52,7 @@ class Transmission(object):
         Transmit the packet, go into slave mode and wait until the whole
         sequence is finished.
         """
+        self.abort_requested = False
         if not self.is_master or self.is_waiting:
             raise TransmissionException(
                 'Can\'t send until transmisson is ready')
@@ -61,7 +63,7 @@ class Transmission(object):
             logger.debug("> %r", packet)
             success, response = self.transport.send(packet.serialize())
             if not response:
-                raise TransmissionException('No data, possibly aborted')
+                raise TransmissionException('send: No data, possibly aborted')
             response = Packet.parse(response)
             logger.debug("< %r", response)
             history += [(True, response)]
@@ -76,7 +78,12 @@ class Transmission(object):
                     success, response = self.transport.receive(
                         self.actual_timeout)
                     if not response:
-                        raise TransmissionException('No data, possibly aborted')
+                        if self.abort_requested:
+                            self.abort_requested = False
+                            # Das sendet den Abort-Befehl und liest dessen Bestätigung. Danach geht es in dieser Schleife weiter.
+                            success, response = self.transport.send(AbortCommand().serialize())
+                            continue
+                        raise TransmissionException('receive: No data, possibly aborted')
                     response = Packet.parse(response)
                     logger.debug("< %r", response)
                     history += [(True, response)]
